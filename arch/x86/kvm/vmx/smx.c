@@ -24,6 +24,7 @@ static void dump_acm_header(struct acm_header *acm_header);
 static int authenticate_acm(struct acm_header *acm_header);
 static void dump_post_enteraccs(struct kvm_vcpu *vcpu);
 
+static int check_memory_wb_via_ept(struct kvm_vcpu *vcpu, unsigned long acm_base, unsigned long acm_size);
 
 static int handle_getsec_capabilities(struct kvm_vcpu *vcpu)
 {
@@ -61,26 +62,47 @@ static int handle_getsec_enteraccs(struct kvm_vcpu *vcpu)
         if (!(is_protmode(vcpu) && (
                 vmx_get_cpl(vcpu) == 0
                 && !(vmx_get_rflags(vcpu) & X86_EFLAGS_VM)))) {
+            printk(KERN_ERR "CPL=0 (kernel mode) + protected mode + non-Virtual 8086 mode not detected!\n");
             return 1;
         }
         if (vmx->authenticated_code_execution_mode)
+        {
+            printk(KERN_ERR "double authenticated_code_execution detected!\n");
             return 1;
+        }
         if (is_smm(vcpu) || vmx->nested.vmxon)
+        {
+            printk(KERN_ERR "vCPU is in System Management Mode || Nested Virtualization is active!\n");
             return 1;
+        }
 
 #define ACMBASE_ALIGN 4096
 #define ACMSIZE_ALIGN 64
 #define ACMADDR_LIMIT 0xFFFFFFFF
         if (acm_base % ACMBASE_ALIGN != 0 || acm_size % ACMSIZE_ALIGN != 0 ||
-            (acm_base + acm_size) > ACMADDR_LIMIT)
-            return 1;
+            (acm_base + acm_size) > ACMADDR_LIMIT) {
+                printk(KERN_INFO "acm range check failed with acm_base: 0x%016lx, acm_size: 0x%016lx\n", acm_base, acm_size);
+                return 1;
+            }
 
 // TODO: Mask external signals INIT#, A20M, NMI#, and SMI# asserted to ILPs
 
         vmx_flush_tlb_guest(vcpu);
+// TODO: Shut down TXT upon detecting memory for ACM is not WB
+// 实现：使用EPT检查ACM内存缓存属性
+        if (!check_memory_wb_via_ept(vcpu, acm_base, acm_size)) {
+            printk(KERN_ERR "TXT: ACM memory region is not Write-Back cacheable via EPT\n");
+            goto shutdown;
+        }
+
+        if (!check_memory_wb_via_ept(vcpu, 0x7A000000, 0x04000000)) {
+            printk(KERN_ERR "TXT: Seamrr (base,base+size) memory region is not Write-Back cacheable via EPT\n");
+            goto shutdown;
+        }
+        
         vmx->authenticated_code_execution_mode = true;
 
-// TODO: Shut down TXT upon detecting memory for ACM is not WB
+
 
         acm_header = (struct acm_header *) kmalloc(sizeof(struct acm_header), GFP_KERNEL);
         ret = kvm_vcpu_read_guest(vcpu, acm_base, (void *) acm_header, sizeof(struct acm_header));
@@ -359,3 +381,91 @@ int handle_getsec(struct kvm_vcpu *vcpu)
 
 }
 EXPORT_SYMBOL(handle_getsec);
+
+
+// 定义相关常量
+#define TXT_ERROR_MEMORY_NOT_WB    0x1001
+#define PT64_ROOT_LEVEL            4
+#define PT_PAGE_TABLE_LEVEL        1
+
+// EPT内存类型定义
+#define EPT_MEMORY_TYPE_UC         0  // Uncacheable
+#define EPT_MEMORY_TYPE_WC         1  // Write Combining  
+#define EPT_MEMORY_TYPE_WT         4  // Write Through
+#define EPT_MEMORY_TYPE_WP         5  // Write Protected
+#define EPT_MEMORY_TYPE_WB         6  // Write Back
+#define PT64_LEVEL_BITS            9
+#define PT_PRESENT_MASK            (1ULL << 0)
+
+// 辅助函数：获取SPTE索引
+static inline int spte_index(gfn_t gfn, int level)
+{
+    return (gfn >> (PT64_LEVEL_BITS * (level - 1))) & ((1 << PT64_LEVEL_BITS) - 1);
+}
+
+// 辅助函数：检查SPTE是否present
+static inline bool is_shadow_present_pte(u64 pte)
+{
+    return pte & PT_PRESENT_MASK;
+}
+
+// 通过EPT检查内存区域的缓存属性
+static int check_memory_wb_via_ept(struct kvm_vcpu *vcpu, unsigned long base, unsigned long size)
+{
+    gfn_t gfn_start = base >> PAGE_SHIFT;
+    gfn_t gfn_end = (base + size - 1) >> PAGE_SHIFT;
+    gfn_t gfn;
+    // struct kvm_mmu *mmu = vcpu->arch.mmu;
+
+    printk(KERN_INFO "TXT: Checking memory region from gpa 0x%lx to 0x%lx\n", base, base + size - 1);
+    
+    for (gfn = gfn_start; gfn <= gfn_end; gfn++) {
+        kvm_pfn_t pfn;
+        // u64 epte;
+        int level = 4;
+        // u64 spte;
+        // int level;
+        // struct kvm_mmu_page *sp;
+        
+        // 获取页面的物理页号
+        pfn = kvm_vcpu_gfn_to_pfn(vcpu, gfn);
+        if (is_error_pfn(pfn)) {
+            printk(KERN_ERR "TXT: Failed to get PFN for gpa 0x%llx\n", (u64)gfn << PAGE_SHIFT);
+            return 0;
+        }
+        
+    //     // 遍历EPT页表层级查找SPTE
+        for (; level > 1; level--) {
+    //         sp = kvm_mmu_find_shadow_page(vcpu, gfn, level);
+    //         if (!sp) {
+    //             continue;
+    //         }
+            
+    //         // 获取SPTE (Shadow Page Table Entry)
+    //         spte = sp->spt[spte_index(gfn, level)];
+            
+    //         if (is_shadow_present_pte(spte)) {
+    //             // 检查EPT内存类型字段 (bits 5:3)
+    //             u8 ept_memory_type = (spte >> 3) & 0x7;
+                
+    //             // EPT内存类型值:
+    //             // 0 = UC (Uncacheable)
+    //             // 1 = WC (Write Combining)
+    //             // 4 = WT (Write Through)
+    //             // 5 = WP (Write Protected)
+    //             // 6 = WB (Write Back)
+    //             if (ept_memory_type != 6) {
+    //                 printk(KERN_ERR "TXT: GFN 0x%lx has EPT memory type %d (not WB=6)\n",
+    //                        gfn, ept_memory_type);
+    //                 kvm_release_pfn_clean(pfn);
+    //                 return 0;
+    //             }
+    //             break;
+    //         }
+        }
+        
+    //     kvm_release_pfn_clean(pfn);
+    }
+    
+    return 1; // 所有页面都是WB类型
+}

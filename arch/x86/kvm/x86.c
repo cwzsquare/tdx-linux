@@ -1212,31 +1212,77 @@ void kvm_post_set_cr4(struct kvm_vcpu *vcpu, unsigned long old_cr4, unsigned lon
 }
 EXPORT_SYMBOL_GPL(kvm_post_set_cr4);
 
+// int kvm_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
+// {
+// 	unsigned long old_cr4 = kvm_read_cr4(vcpu);
+
+// 	if (!kvm_is_valid_cr4(vcpu, cr4))
+// 		return 1;
+
+// 	if (is_long_mode(vcpu)) {
+// 		if (!(cr4 & X86_CR4_PAE))
+// 			return 1;
+// 		if ((cr4 ^ old_cr4) & X86_CR4_LA57)
+// 			return 1;
+// 	} else if (is_paging(vcpu) && (cr4 & X86_CR4_PAE)
+// 		   && ((cr4 ^ old_cr4) & X86_CR4_PDPTR_BITS)
+// 		   && !load_pdptrs(vcpu, kvm_read_cr3(vcpu)))
+// 		return 1;
+
+// 	if ((cr4 & X86_CR4_PCIDE) && !(old_cr4 & X86_CR4_PCIDE)) {
+// 		/* PCID can not be enabled when cr3[11:0]!=000H or EFER.LMA=0 */
+// 		if ((kvm_read_cr3(vcpu) & X86_CR3_PCID_MASK) || !is_long_mode(vcpu))
+// 			return 1;
+// 	}
+
+// 	if ((cr4 & X86_CR4_CET) && !kvm_is_cr0_bit_set(vcpu, X86_CR0_WP))
+// 		return 1;
+
+// 	static_call(kvm_x86_set_cr4)(vcpu, cr4);
+
+// 	kvm_post_set_cr4(vcpu, old_cr4, cr4);
+
+// 	return 0;
+// }
+// EXPORT_SYMBOL_GPL(kvm_set_cr4);
+
 int kvm_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 {
 	unsigned long old_cr4 = kvm_read_cr4(vcpu);
 
-	if (!kvm_is_valid_cr4(vcpu, cr4))
+	if (!kvm_is_valid_cr4(vcpu, cr4)) {
+		printk(KERN_ERR "%s: kvm_is_not valid_cr4\n", __func__);
 		return 1;
+	}
 
 	if (is_long_mode(vcpu)) {
-		if (!(cr4 & X86_CR4_PAE))
+		if (!(cr4 & X86_CR4_PAE)) {
+			printk(KERN_ERR "%s: long mode but CR4.PAE not set, cr4=0x%lx\n", __func__, cr4);
 			return 1;
-		if ((cr4 ^ old_cr4) & X86_CR4_LA57)
+		}
+		if ((cr4 ^ old_cr4) & X86_CR4_LA57) {
+			printk(KERN_ERR "%s: CR4.LA57 change not allowed in long mode, old_cr4=0x%lx, cr4=0x%lx\n", __func__, old_cr4, cr4);
 			return 1;
+		}
 	} else if (is_paging(vcpu) && (cr4 & X86_CR4_PAE)
 		   && ((cr4 ^ old_cr4) & X86_CR4_PDPTR_BITS)
-		   && !load_pdptrs(vcpu, kvm_read_cr3(vcpu)))
+		   && !load_pdptrs(vcpu, kvm_read_cr3(vcpu))) {
+		printk(KERN_ERR "%s: failed to load PDPTRs with PAE paging, cr4=0x%lx, old_cr4=0x%lx, cr3=0x%lx\n", __func__, cr4, old_cr4, kvm_read_cr3(vcpu));
 		return 1;
+	}
 
 	if ((cr4 & X86_CR4_PCIDE) && !(old_cr4 & X86_CR4_PCIDE)) {
 		/* PCID can not be enabled when cr3[11:0]!=000H or EFER.LMA=0 */
-		if ((kvm_read_cr3(vcpu) & X86_CR3_PCID_MASK) || !is_long_mode(vcpu))
+		if ((kvm_read_cr3(vcpu) & X86_CR3_PCID_MASK) || !is_long_mode(vcpu)) {
+			printk(KERN_ERR "%s: PCID enable failed, cr3=0x%lx (mask=0x%lx), long_mode=%d\n", __func__, kvm_read_cr3(vcpu), kvm_read_cr3(vcpu) & X86_CR3_PCID_MASK, is_long_mode(vcpu));
 			return 1;
+		}
 	}
 
-	if ((cr4 & X86_CR4_CET) && !kvm_is_cr0_bit_set(vcpu, X86_CR0_WP))
+	if ((cr4 & X86_CR4_CET) && !kvm_is_cr0_bit_set(vcpu, X86_CR0_WP)) {
+		printk(KERN_ERR "%s: CET enabled but CR0.WP not set, cr4=0x%lx\n", __func__, cr4);
 		return 1;
+	}
 
 	static_call(kvm_x86_set_cr4)(vcpu, cr4);
 

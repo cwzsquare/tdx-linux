@@ -5700,6 +5700,7 @@ static __always_inline int handle_external_interrupt(struct kvm_vcpu *vcpu)
 static int handle_triple_fault(struct kvm_vcpu *vcpu)
 {
 	printk(KERN_WARNING "[opentdx] triple fault while running 0x%0lx\n", kvm_rip_read(vcpu));
+	dump_stack(); // Print kernel stack trace
 
 	vcpu->run->exit_reason = KVM_EXIT_SHUTDOWN;
 	vcpu->mmio_needed = 0;
@@ -6134,6 +6135,8 @@ static int handle_ept_violation(struct kvm_vcpu *vcpu)
 
 	error_code |= (exit_qualification & EPT_VIOLATION_GVA_TRANSLATED) != 0 ?
 	       PFERR_GUEST_FINAL_MASK : PFERR_GUEST_PAGE_MASK;
+
+	// printk(KERN_INFO "EPT Violation: RIP=0x%016lx, with gpa 0x%016llx fault of %s\n", kvm_rip_read(vcpu), (u64)gpa, (exit_qualification & EPT_VIOLATION_ACC_WRITE) ? "w" : "not w");
 
 	vcpu->arch.exit_qualification = exit_qualification;
 
@@ -6969,6 +6972,11 @@ static int __vmx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t exit_fastpath)
 						kvm_vmx_max_exit_handlers);
 	if (!kvm_vmx_exit_handlers[exit_handler_index])
 		goto unexpected_vmexit;
+
+	if (EXIT_REASON_TRIPLE_FAULT == exit_handler_index) {
+		printk(KERN_ERR "EXIT_REASON_TRIPLE_FAULT!!\n");
+		dump_vmcs(vcpu);
+	}
 
 	return kvm_vmx_exit_handlers[exit_handler_index](vcpu);
 

@@ -11,7 +11,7 @@
 #define MSR_IA32_WBNOINVDP              0x99
 #define NUM_CACHE_BLOCKS                0x1
 
-#define KEYID_BITS  6ULL
+#define KEYID_BITS  3ULL
 
 #define MSR_IA32_TME_CAPABILITY         0x981
 #define TME_CAP_AES_128                 BIT(0)

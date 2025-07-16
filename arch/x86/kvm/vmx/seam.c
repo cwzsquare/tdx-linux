@@ -420,6 +420,191 @@ static int load_guest_state(struct kvm_vcpu *vcpu, u8 *vmcs)
     return 0;
 }
 
+// static void load_host_state(struct kvm_vcpu *vcpu, u8 *vmcs)
+// {
+//     u32 exit_ctls = vmcs_read(VM_EXIT_CONTROL);
+
+//     unsigned long cr0, cr3, cr4;
+//     u64 efer, rflags;
+//     struct kvm_segment cs = {0,}, ss = {0,}, ds = {0,}, es = {0,}, fs = {0,}, gs = {0,}, tr = {0,};
+//     struct kvm_segment ldtr = {0,};
+//     struct desc_ptr gdtr, idtr;
+//     unsigned long rip, rsp;
+//     u32 instr_len; 
+
+//     int has_cet = kvm_cpu_cap_has(X86_FEATURE_SHSTK) && kvm_cpu_cap_has(X86_FEATURE_IBT);
+
+//     // cr0 = vmcs_read(HOST_CR0);
+//     // cr3 = vmcs_read(HOST_CR3);
+//     // cr4 = vmcs_read(HOST_CR4);
+
+//     cr0 = vmcs_readl(HOST_CR0);
+//     cr3 = vmcs_readl(HOST_CR3);
+//     cr4 = vmcs_readl(HOST_CR4);
+
+//     if (!(cr0 && cr3 && cr4)) {
+//         printk(KERN_WARNING "[opentdx] load_host_state read HOST CR0:0x%016lx CR3:0x%016lx CR4:0x%016lx\n", cr0, cr3, cr4);
+//         dump_vmcs(vcpu);
+//         return;
+//     }
+
+//     /* 28.5 Loading Host State */
+
+//     /* 28.5.1 Loading Host Control Registers, Debug Registers, MSRs */
+
+// // TODO: Check CR0, CR3, CR4
+//     if (kvm_set_cr0(vcpu, cr0)) {
+//         printk(KERN_WARNING "[opentdx] failed to set cr0 to %lx in seamcall\n", cr0);
+//         BUG();
+//     }
+//     if (kvm_set_cr3(vcpu, cr3)) {
+//         printk(KERN_WARNING "[opentdx] failed to set cr3 to %lx in seamcall\n", cr3);
+//         BUG();
+//     }
+
+//     if (exit_ctls & VM_EXIT_HOST_ADDR_SPACE_SIZE)
+//         cr4 |= X86_CR4_PAE;
+//     else
+//         cr4 &= ~X86_CR4_PCIDE;
+
+//     if (!has_cet) {
+//         printk_once(KERN_WARNING "[opentdx] do not support setting X86_CR4_CET\n");
+//         cr4 &= ~X86_CR4_CET;
+//     }
+//     if (kvm_set_cr4(vcpu, cr4)) {
+//         printk(KERN_WARNING "[opentdx] failed to set cr4 to %lx in seamcall\n", cr4);
+//         // BUG();
+//         dump_vmcs(vcpu);
+//         return;
+//     }
+
+//     kvm_set_dr(vcpu, 7, 0x400);
+// // TODO: Handle clear UINV
+
+//     kvm_emulate_msr_write(vcpu, MSR_IA32_DEBUGCTLMSR, 0x0);
+//     kvm_emulate_msr_write(vcpu, MSR_IA32_SYSENTER_CS, vmcs_read(HOST_IA32_SYSENTER_CS));
+//     kvm_emulate_msr_write(vcpu, MSR_IA32_SYSENTER_ESP, vmcs_read(HOST_IA32_SYSENTER_ESP));
+//     kvm_emulate_msr_write(vcpu, MSR_IA32_SYSENTER_EIP, vmcs_read(HOST_IA32_SYSENTER_EIP));
+
+// #ifdef CONFIG_X86_64
+//     kvm_emulate_msr_write(vcpu, MSR_FS_BASE, vmcs_read(HOST_FS_BASE));
+//     kvm_emulate_msr_write(vcpu, MSR_GS_BASE, vmcs_read(HOST_GS_BASE));
+// #endif
+
+//     if (exit_ctls & VM_EXIT_LOAD_IA32_EFER) {
+//         efer = vmcs_read(HOST_IA32_EFER_FULL);
+//         efer &= (exit_ctls & VM_EXIT_HOST_ADDR_SPACE_SIZE) ? -1ULL : ~(EFER_LMA | EFER_LME);
+
+//         kvm_emulate_msr_write(vcpu, MSR_EFER, efer);
+//     }
+//     if (exit_ctls & VM_EXIT_LOAD_IA32_PAT)
+//         kvm_emulate_msr_write(vcpu, MSR_IA32_CR_PAT, vmcs_read(HOST_IA32_PAT_FULL));
+// // TODO: IA32_PERF_GLOBAL_CTL
+// // TODO: IA32_BNDCFGS
+//     if (exit_ctls & VM_EXIT_CLEAR_IA32_RTIT_CTL)
+//         kvm_emulate_msr_write(vcpu, MSR_IA32_RTIT_CTL, 0x0);
+//     if (has_cet && (exit_ctls & VM_EXIT_LOAD_CET_STATE)) {
+//         kvm_emulate_msr_write(vcpu, MSR_IA32_S_CET, vmcs_read(HOST_IA32_S_CET));
+//         kvm_emulate_msr_write(vcpu, MSR_IA32_INT_SSP_TAB, vmcs_read(HOST_IA32_INTERRUPT_SSP_TABLE_ADDR));
+//     }
+// // TODO: IA32_PKRS
+
+//     /* 28.5.2 Loading Host Segment and Descriptor-Table Registers */
+
+//     cs.base = 0;
+//     cs.limit = 0xFFFFFFFF;
+//     cs.type = 0xB;
+//     cs.s = 1;
+//     cs.dpl = 0;
+//     cs.present = 1;
+
+//     if (exit_ctls & VM_EXIT_HOST_ADDR_SPACE_SIZE) {
+//         cs.l = 1;
+//         cs.db = 0;
+//     } else
+//         cs.db = 1;
+//     cs.g = 1;
+
+//     ss.base = ds.base = es.base = 0;
+//     fs.base = vmcs_read(HOST_FS_BASE);
+//     gs.base = vmcs_read(HOST_GS_BASE);
+//     tr.base = vmcs_read(HOST_TR_BASE);
+
+//     ss.limit = ds.limit = es.limit = fs.limit = gs.limit = 0xFFFFFFFF;
+//     tr.limit = 0x67;
+//     ss.type = ds.type = es.type = fs.type = gs.type = 0x3;
+//     ss.s = ds.s = es.s = fs.s = gs.s = 1;
+//     tr.type = 0xb;
+//     tr.s = 0;
+
+//     ss.dpl = tr.dpl = 0;
+//     ds.dpl = es.dpl = fs.dpl = gs.dpl = 0;
+
+//     tr.present = 1;
+//     ss.present = ds.present = es.present = fs.present = gs.present = 1;
+
+//     ss.db = 1;
+//     ds.db = es.db = fs.db = gs.db = 1;
+//     tr.db = 0;
+
+//     ss.g = ds.g = es.g = fs.g = gs.g = 1;
+//     tr.g = 0;
+
+//     cs.selector = vmcs_read(HOST_CS_SELECTOR);
+//     ss.selector = vmcs_read(HOST_SS_SELECTOR);
+//     ds.selector = vmcs_read(HOST_DS_SELECTOR);
+//     es.selector = vmcs_read(HOST_ES_SELECTOR);
+//     fs.selector = vmcs_read(HOST_FS_SELECTOR);
+//     gs.selector = vmcs_read(HOST_GS_SELECTOR);
+//     tr.selector = vmcs_read(HOST_TR_SELECTOR);
+
+//     __vmx_set_segment(vcpu, &cs, VCPU_SREG_CS);
+//     __vmx_set_segment(vcpu, &ss, VCPU_SREG_SS);
+//     __vmx_set_segment(vcpu, &ds, VCPU_SREG_DS);
+//     __vmx_set_segment(vcpu, &es, VCPU_SREG_ES);
+//     __vmx_set_segment(vcpu, &fs, VCPU_SREG_FS);
+//     __vmx_set_segment(vcpu, &gs, VCPU_SREG_GS);
+//     __vmx_set_segment(vcpu, &tr, VCPU_SREG_TR);
+
+//     ldtr.selector = 0;
+//     ldtr.unusable = 1;
+//     __vmx_set_segment(vcpu, &ldtr, VCPU_SREG_LDTR);
+
+//     gdtr.address = vmcs_read(HOST_GDTR_BASE);
+//     gdtr.size = 0xFFFF;
+
+//     idtr.address = vmcs_read(HOST_IDTR_BASE);
+//     idtr.size = 0xFFFF;
+
+//     vmx_set_gdt(vcpu, &gdtr);
+//     vmx_set_idt(vcpu, &idtr);
+
+//     /* 28.5.3 Loading Host RIP, RSP, RFLAGS, and SSP */
+//     rip = vmcs_read(HOST_RIP);
+//     rsp = vmcs_read(HOST_RSP);
+//     rflags = vmx_get_rflags(vcpu) & ~(X86_EFLAGS_CF | X86_EFLAGS_OF | X86_EFLAGS_SF | 
+//                                       X86_EFLAGS_PF | X86_EFLAGS_AF | X86_EFLAGS_ZF);
+
+//     instr_len = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
+//     kvm_rip_write(vcpu, rip - instr_len);
+//     kvm_rsp_write(vcpu, rsp);
+//     vmx_set_rflags(vcpu, rflags);
+//     if (has_cet)
+//         vmcs_writel(GUEST_SSP, vmcs_read(HOST_SSP));
+
+//     /* 28.5.4 Checking and Loading Host Page-Directory-Pointer-Table Entries */
+//     // NOTE: PAE paging is not supported
+
+//     /* 28.5.5 Updating Non-Register State */
+//     // TODO
+
+//     /* 28.5.6 Clearning Address-Range Monitoring */
+//     // TODO
+
+//     /* 28.6 Loading MSRs */
+//     // NOTE: MSR loading is not supported by SEAM VMCS
+// }
+
 static void load_host_state(struct kvm_vcpu *vcpu, u8 *vmcs)
 {
     u32 exit_ctls = vmcs_read(VM_EXIT_CONTROL);
@@ -437,6 +622,18 @@ static void load_host_state(struct kvm_vcpu *vcpu, u8 *vmcs)
     cr0 = vmcs_read(HOST_CR0);
     cr3 = vmcs_read(HOST_CR3);
     cr4 = vmcs_read(HOST_CR4);
+
+    /* PLEASE CONSIDER the width, vmcs_readl may lose some bits!!!*/
+    // cr0 = vmcs_readl(HOST_CR0);
+    // cr3 = vmcs_readl(HOST_CR3);
+    // cr4 = vmcs_readl(HOST_CR4);
+
+    // if cr0 cr3 cr4 have one value with 0
+    if (!(cr0 && cr3 && cr4)) {
+        printk(KERN_WARNING "[opentdx] load_host_state read HOST CR0:0x%016lx CR3:0x%016lx CR4:0x%016lx\n", cr0, cr3, cr4);
+        dump_vmcs(vcpu);
+        return;
+    }
 
     /* 28.5 Loading Host State */
 
@@ -463,7 +660,9 @@ static void load_host_state(struct kvm_vcpu *vcpu, u8 *vmcs)
     }
     if (kvm_set_cr4(vcpu, cr4)) {
         printk(KERN_WARNING "[opentdx] failed to set cr4 to %lx in seamcall\n", cr4);
-        BUG();
+        // BUG();
+        dump_vmcs(vcpu);
+        return;
     }
 
     kvm_set_dr(vcpu, 7, 0x400);
@@ -730,28 +929,35 @@ int handle_seamcall(struct kvm_vcpu *vcpu)
 
     kvm_read_guest_page(vcpu->kvm, gpa_to_gfn(vmx->seam_vmptr), vmcs, 0, PAGE_SIZE);
 
-// TODO: Save event inhibits in VMM interruptability status
-// TODO: Inhibit SMI and NMI
     save_exit_info(vcpu, (u8 *) vmcs);
     save_guest_state(vcpu, (u8 *) vmcs);
     load_host_state(vcpu, (u8 *) vmcs);
 
-    down_read(&vcpu->kvm->arch.apicv_update_lock);
-    preempt_disable();
+// TODO: Save event inhibits in VMM interruptability status
+// TODO: Inhibit SMI and NMI
+    if (enable_apicv) {
+        
+        down_read(&vcpu->kvm->arch.apicv_update_lock);
+        preempt_disable();
 
-    svi = vmcs_read16(GUEST_INTR_STATUS) >> 8;
-    if (svi) {
-        printk(KERN_WARNING "[opentdx] intr not resolved before seamcall (SVI=%d)\n", svi);
-        BUG(); // TODO: don't know whether OpenTDX should handle it
+        printk(KERN_INFO "[opentdx] before handle_seamcall::vmcs_read16(GUEST_INTR_STATUS)\n");
+        svi = vmcs_read16(GUEST_INTR_STATUS) >> 8;
+        if (svi) {
+            printk(KERN_WARNING "[opentdx] intr not resolved before seamcall (SVI=%d)\n", svi);
+            BUG(); // TODO: don't know whether OpenTDX should handle it
+        }
+
+        vcpu->arch.apic->apicv_active = false;
+        kvm_apic_update_apicv(vcpu);
+        vmx_refresh_apicv_exec_ctrl(vcpu);
+        kvm_make_request(KVM_REQ_EVENT, vcpu);
+
+        preempt_enable();
+        up_read(&vcpu->kvm->arch.apicv_update_lock);
     }
 
-    vcpu->arch.apic->apicv_active = false;
-    kvm_apic_update_apicv(vcpu);
-    vmx_refresh_apicv_exec_ctrl(vcpu);
-    kvm_make_request(KVM_REQ_EVENT, vcpu);
-
-    preempt_enable();
-    up_read(&vcpu->kvm->arch.apicv_update_lock);
+    // else
+    //     printk(KERN_WARNING "[opentdx] during %s, enable_apicv=%d\n", __func__, enable_apicv);
 
     kvm_write_guest_page(vcpu->kvm, gpa_to_gfn(vmx->seam_vmptr), vmcs, 0, PAGE_SIZE);
 
@@ -816,17 +1022,21 @@ int handle_seamret(struct kvm_vcpu *vcpu)
         mutex_unlock(&kvm_vmx->p_seamldr_lock);
     }
 
-    down_read(&vcpu->kvm->arch.apicv_update_lock);
-    preempt_disable();
+    if (enable_apicv) {
+        down_read(&vcpu->kvm->arch.apicv_update_lock);
+        preempt_disable();
 
-    vcpu->arch.apic->apicv_active = true;
-    kvm_apic_update_apicv(vcpu);
-    vmx_hwapic_irr_update(vcpu, kvm_lapic_find_highest_irr(vcpu));
-    vmx_hwapic_isr_update(kvm_lapic_find_highest_isr(vcpu));
-    vmx_refresh_apicv_exec_ctrl(vcpu);
+        vcpu->arch.apic->apicv_active = true;
+        kvm_apic_update_apicv(vcpu);
+        vmx_hwapic_irr_update(vcpu, kvm_lapic_find_highest_irr(vcpu));
+        vmx_hwapic_isr_update(kvm_lapic_find_highest_isr(vcpu));
+        vmx_refresh_apicv_exec_ctrl(vcpu);
 
-    preempt_enable();
-    up_read(&vcpu->kvm->arch.apicv_update_lock);
+        preempt_enable();
+        up_read(&vcpu->kvm->arch.apicv_update_lock);
+    }
+    // else
+    //     printk(KERN_WARNING "[opentdx] during %s, enable_apicv=%d\n", __func__, enable_apicv);
 
 exit:
     free_page((unsigned long) vmcs);
