@@ -346,3 +346,153 @@ err:
         vfree(page_keyids);
     return ret;
 }
+
+/*
+;-----------------------------------------------------------------------------
+;-----------------------------------------------------------------------------
+;  Procedure:	movdir64b_fallback
+; 
+;  Input:	Source (RSI)
+;           Destination (RDI)
+; 
+;  Output:	None
+; 
+;  Description:  Fallback implementation using regular moves
+; 
+;-----------------------------------------------------------------------------
+;-----------------------------------------------------------------------------
+movdir64b_fallback:
+    push       rax
+    
+    ; Move 64 bytes using 8 x 8-byte moves
+    mov        rax, [rsi]
+    mov        [rdi], rax
+    
+    mov        rax, [rsi + 8]
+    mov        [rdi + 8], rax
+    
+    mov        rax, [rsi + 16]
+    mov        [rdi + 16], rax
+    
+    mov        rax, [rsi + 24]
+    mov        [rdi + 24], rax
+    
+    mov        rax, [rsi + 32]
+    mov        [rdi + 32], rax
+    
+    mov        rax, [rsi + 40]
+    mov        [rdi + 40], rax
+    
+    mov        rax, [rsi + 48]
+    mov        [rdi + 48], rax
+    
+    mov        rax, [rsi + 56]
+    mov        [rdi + 56], rax
+    
+    pop        rax
+    ret
+*/
+int handle_movdir64b(struct kvm_vcpu *vcpu) {
+    // if we are here, movdir64b must not supported by the host
+    static const char movdir64b_bytecode[] = { __MOVDIR64B_BYTECODE };
+    unsigned long rip = kvm_rip_read(vcpu);
+    u64 src, dst;
+    u8 data[64];
+    int ret;
+    gva_t src_gva, dst_gva;
+    
+    // Read source and destination addresses from guest registers
+    src = kvm_rdi_read(vcpu);
+    dst = kvm_rsi_read(vcpu);
+
+    printk(KERN_INFO "[opentdx] %s: src=0x%llx, dst=0x%llx\n", __func__, src, dst);
+    /* due to movdir64b used on psealdr booting, maybe dst, src're gpa*/
+    if ((src >> 32) == 0 && (dst >> 32) == 0) {
+        // printk(KERN_INFO "[opentdx] %s: src && dst is less than 4GB src=0x%llx, dst=0x%llx\n", __func__, src, dst);
+        // printk(KERN_WARNING "[opentdx] src && dst is less than 4GB\n");
+        // If src is less than 4GB, treat it as a GPA
+        // gpa_t dst_gpa = (gpa_t)dst;
+        // gpa_t src_gpa = (gpa_t)src;
+        // // Read 64 bytes from source GPA
+        // ret = kvm_vcpu_read_guest(vcpu, src_gpa, data, 64);
+        // if (ret < 0) {
+        //     printk(KERN_ERR "[opentdx] Failed to read from source GPA 0x%llx\n", (u64)src_gpa);
+        //     return 0;
+        // }
+        // // Write 64 bytes to destination GPA atomically
+        // ret = kvm_vcpu_write_guest(vcpu, dst_gpa, data, 64);
+        // if (ret < 0) {
+        //     printk(KERN_ERR "[opentdx] Failed to write to destination GPA 0x%llx\n", (u64)dst_gpa);
+        //     return 0;
+        // }
+    }
+    else {
+        src_gva = (gva_t)src;
+        dst_gva = (gva_t)dst;
+        
+        // Read 64 bytes from source
+        ret = kvm_read_guest_virt(vcpu, src_gva, data, 64, NULL);
+        if (ret != X86EMUL_CONTINUE) {
+            printk(KERN_ERR "[opentdx] Failed to read from source GVA 0x%llx\n", (u64)src_gva);
+            return 0;
+        }
+            
+        // Write 64 bytes to destination atomically
+        // Note: True atomicity for 64 bytes is hardware-specific
+        ret = kvm_write_guest_virt_system(vcpu, dst_gva, data, 64, NULL);
+        if (ret != X86EMUL_CONTINUE) {
+            printk(KERN_ERR "[opentdx] Failed to write to destination GVA 0x%llx\n", (u64)dst_gva);
+            return 0;
+        }
+    }
+
+
+    
+    // Advance RIP to next instruction
+    // MOVDIR64B is typically a 4-byte instruction
+    kvm_rip_write(vcpu, rip + sizeof(movdir64b_bytecode));
+    
+    return 1;
+}
+
+// int handle_movdir64b(struct kvm_vcpu *vcpu) {
+//     // if we are here, movdir64b must not supported by the host
+//     static const char movdir64b_bytecode[] = { __MOVDIR64B_BYTECODE };
+//     unsigned long rip = kvm_rip_read(vcpu);
+//     u64 src, dst;
+//     u8 data[64];
+//     int ret;
+//     gva_t src_gva, dst_gva;
+    
+//     // Read source and destination addresses from guest registers
+//     src = kvm_rcx_read(vcpu);
+//     dst = kvm_rdx_read(vcpu);
+
+//     printk(KERN_INFO "[opentdx] handle_movdir64b: src=0x%llx, dst=0x%llx\n", src, dst);
+
+//     src_gva = (gva_t)src;
+//     dst_gva = (gva_t)dst;
+    
+//     // Read 64 bytes from source
+//     ret = kvm_read_guest_virt(vcpu, src_gva, data, 64, NULL);
+//     if (ret != X86EMUL_CONTINUE) {
+//         printk(KERN_ERR "[opentdx] Failed to read from source GVA 0x%llx\n", (u64)src_gva);
+//         return 0;
+//     }
+        
+//     // Write 64 bytes to destination atomically
+//     // Note: True atomicity for 64 bytes is hardware-specific
+//     ret = kvm_write_guest_virt_system(vcpu, dst_gva, data, 64, NULL);
+//     if (ret != X86EMUL_CONTINUE) {
+//         printk(KERN_ERR "[opentdx] Failed to write to destination GVA 0x%llx\n", (u64)dst_gva);
+//         return 0;
+//     }
+
+
+    
+//     // Advance RIP to next instruction
+//     // MOVDIR64B is typically a 4-byte instruction
+//     kvm_rip_write(vcpu, rip + sizeof(movdir64b_bytecode));
+    
+//     return 1;
+// }

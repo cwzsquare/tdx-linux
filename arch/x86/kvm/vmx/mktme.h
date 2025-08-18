@@ -6,6 +6,12 @@
 #include <linux/kvm_host.h>
 
 #define __PCONFIG_BYTECODE              0x0f,0x01,0xc5
+#define __MOVDIR64B_BYTECODE            0x66, 0x0F, 0x38, 0xF8, /*movdir64b op*/ 0x37 /*ModRM = RDI->RSI*/
+// _STATIC_INLINE_ void movdir64b(const void *src, uint64_t dst)
+// {
+//     _ASM_VOLATILE_ (".byte  0x66, 0x0F, 0x38, 0xF8," /*movdir64b op*/ "0x37;" /*ModRM = RDI->RSI*/
+//                     : : "D"(src), "S"(dst) : "memory" );
+// }
 
 #define MSR_IA32_WBINVDP                0x98
 #define MSR_IA32_WBNOINVDP              0x99
@@ -148,5 +154,7 @@ int get_mktme_state(struct kvm_vcpu *vcpu, struct kvm_mktme_state __user *user_k
 int get_mktme_entries(struct kvm_vcpu *vcpu, struct kvm_mktme_entries __user *user_mktme_entries);
 int get_page_keyids(struct kvm_vcpu *vcpu, struct kvm_page_keyids __user *user_page_keyids);
 int set_mktme_state(struct kvm_vcpu *vcpu, struct kvm_mktme_state __user *user_kvm_mktme_state);
+
+int handle_movdir64b(struct kvm_vcpu *vcpu);
 
 #endif
