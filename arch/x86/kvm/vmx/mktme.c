@@ -134,12 +134,12 @@ static int handle_pconfig_mktme_key_program(struct kvm_vcpu *vcpu, gva_t rbx)
     memcpy(mktme_entry->key, buf, key_size);
     mktme_entry->enc_mode = enc_alg;
 
-    // printk(KERN_WARNING "MKTME key program:\n");
-    // printk(KERN_WARNING "keyid: 0x%x\n", mktme_entry->key_id);
-    // printk(KERN_WARNING "key: 0x%x %x %x ... %x %x %x\n", 
-    //     mktme_entry->key[0], mktme_entry->key[1], mktme_entry->key[2],
-    //     mktme_entry->key[29], mktme_entry->key[30], mktme_entry->key[31]);
-    // printk(KERN_WARNING "enc_mode: 0x%x\n", mktme_entry->enc_mode);
+    printk(KERN_WARNING "MKTME key program:\n");
+    printk(KERN_WARNING "keyid: 0x%x\n", mktme_entry->key_id);
+    printk(KERN_WARNING "key: 0x%x %x %x ... %x %x %x\n", 
+        mktme_entry->key[0], mktme_entry->key[1], mktme_entry->key[2],
+        mktme_entry->key[29], mktme_entry->key[30], mktme_entry->key[31]);
+    printk(KERN_WARNING "enc_mode: 0x%x\n", mktme_entry->enc_mode);
 
     return 0;
 }
@@ -398,14 +398,14 @@ int handle_movdir64b(struct kvm_vcpu *vcpu) {
     unsigned long rip = kvm_rip_read(vcpu);
     u64 src, dst;
     u8 data[64];
-    int ret;
+    // u8 tmp[64];
+    int ret = 0;
     gva_t src_gva, dst_gva;
     
     // Read source and destination addresses from guest registers
     src = kvm_rdi_read(vcpu);
     dst = kvm_rsi_read(vcpu);
 
-    printk(KERN_INFO "[opentdx] %s: src=0x%llx, dst=0x%llx\n", __func__, src, dst);
     /* due to movdir64b used on psealdr booting, maybe dst, src're gpa*/
     if ((src >> 32) == 0 && (dst >> 32) == 0) {
         // printk(KERN_INFO "[opentdx] %s: src && dst is less than 4GB src=0x%llx, dst=0x%llx\n", __func__, src, dst);
@@ -425,16 +425,44 @@ int handle_movdir64b(struct kvm_vcpu *vcpu) {
         //     printk(KERN_ERR "[opentdx] Failed to write to destination GPA 0x%llx\n", (u64)dst_gpa);
         //     return 0;
         // }
+        if ((src | dst)>>16)
+        {
+            // ret = kvm_read_guest(vcpu->kvm, (gpa_t)src, data, 64);
+            ret = kvm_read_guest_virt_helper((gva_t)src, data, 64, vcpu, 0, NULL);
+            if (ret < 0) {
+                printk(KERN_ERR "[opentdx] kvm_read_guest_virt_helper Failed to read from source GVA 0x%llx with %d\n", src, ret);
+            }
+            if (dst & (0x40 - 1))
+            {
+                // evil movdir64b, just pass
+                goto fini;
+            }
+            else {
+                ret = kvm_write_guest_virt_helper((gva_t)dst, data, 64, vcpu, 0, NULL);
+                if (ret < 0)
+                {
+                    printk(KERN_ERR "[opentdx] kvm_write_guest_virt_helper Failed to write to destination GVA 0x%llx with %d, try read\n", dst, ret);
+                    // if(kvm_read_guest(vcpu->kvm, (gpa_t)dst, tmp, 64) < 0)
+                    //     printk(KERN_ERR "read also failed\n");
+                    // else
+                    //     printk(KERN_ERR "read success with %d\n", tmp[0]);
+                    goto fini;
+                }
+                // printk(KERN_INFO "[opentdx] %s: seam loader src=0x%llx (%d), dst=0x%llx\n", __func__, src, data[63], dst);
+            }
+        }
+        else
+            printk(KERN_INFO "[opentdx] %s: Real-Address mode src=0x%llx, dst=0x%llx\n", __func__, src, dst);
     }
     else {
         src_gva = (gva_t)src;
         dst_gva = (gva_t)dst;
-        
         // Read 64 bytes from source
         ret = kvm_read_guest_virt(vcpu, src_gva, data, 64, NULL);
         if (ret != X86EMUL_CONTINUE) {
             printk(KERN_ERR "[opentdx] Failed to read from source GVA 0x%llx\n", (u64)src_gva);
-            return 0;
+            // return 0;
+            goto fini;
         }
             
         // Write 64 bytes to destination atomically
@@ -442,17 +470,24 @@ int handle_movdir64b(struct kvm_vcpu *vcpu) {
         ret = kvm_write_guest_virt_system(vcpu, dst_gva, data, 64, NULL);
         if (ret != X86EMUL_CONTINUE) {
             printk(KERN_ERR "[opentdx] Failed to write to destination GVA 0x%llx\n", (u64)dst_gva);
-            return 0;
+            // return 0;
+            goto fini;
         }
     }
 
 
-    
+fini:
     // Advance RIP to next instruction
-    // MOVDIR64B is typically a 4-byte instruction
+    // MOVDIR64B is typically a 4-byte instruction, added 1 byte of ModRM
     kvm_rip_write(vcpu, rip + sizeof(movdir64b_bytecode));
-    
-    return 1;
+    // return ret;
+    if (ret == 0)
+    {
+        printk(KERN_INFO "[opentdx] %s: src=0x%llx (%02X), dst=0x%llx\n", __func__, src, data[0], dst);
+        return 1;
+    }
+    else
+        return 0;
 }
 
 // int handle_movdir64b(struct kvm_vcpu *vcpu) {

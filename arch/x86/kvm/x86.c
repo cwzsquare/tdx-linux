@@ -7840,7 +7840,7 @@ gpa_t kvm_mmu_gva_to_gpa_system(struct kvm_vcpu *vcpu, gva_t gva,
 	return mmu->gva_to_gpa(vcpu, mmu, gva, 0, exception);
 }
 
-static int kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
+int kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
 				      struct kvm_vcpu *vcpu, u64 access,
 				      struct x86_exception *exception)
 {
@@ -7870,6 +7870,7 @@ static int kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
 out:
 	return r;
 }
+EXPORT_SYMBOL_GPL(kvm_read_guest_virt_helper);
 
 /* used for instruction fetching */
 static int kvm_fetch_guest_virt(struct x86_emulate_ctxt *ctxt,
@@ -7932,7 +7933,7 @@ static int emulator_read_std(struct x86_emulate_ctxt *ctxt,
 	return kvm_read_guest_virt_helper(addr, val, bytes, vcpu, access, exception);
 }
 
-static int kvm_write_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
+int kvm_write_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
 				      struct kvm_vcpu *vcpu, u64 access,
 				      struct x86_exception *exception)
 {
@@ -7961,6 +7962,7 @@ static int kvm_write_guest_virt_helper(gva_t addr, void *val, unsigned int bytes
 out:
 	return r;
 }
+EXPORT_SYMBOL_GPL(kvm_write_guest_virt_helper);
 
 static int emulator_write_std(struct x86_emulate_ctxt *ctxt, gva_t addr, void *val,
 			      unsigned int bytes, struct x86_exception *exception,

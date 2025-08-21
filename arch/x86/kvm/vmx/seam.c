@@ -853,6 +853,7 @@ static int vmx_fail_invalid(struct kvm_vcpu *vcpu)
 
 int handle_seamcall(struct kvm_vcpu *vcpu)
 {
+    printk(KERN_INFO "L0 seamcall\n");
     struct vcpu_vmx *vmx = to_vmx(vcpu);
     struct kvm_vmx *kvm_vmx = to_kvm_vmx(vcpu->kvm);
 

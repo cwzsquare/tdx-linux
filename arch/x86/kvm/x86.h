@@ -299,8 +299,16 @@ int kvm_read_guest_virt(struct kvm_vcpu *vcpu,
 	gva_t addr, void *val, unsigned int bytes,
 	struct x86_exception *exception);
 
+int kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
+	struct kvm_vcpu *vcpu, u64 access,
+	struct x86_exception *exception);
+
 int kvm_write_guest_virt_system(struct kvm_vcpu *vcpu,
 	gva_t addr, void *val, unsigned int bytes,
+	struct x86_exception *exception);
+
+int kvm_write_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
+	struct kvm_vcpu *vcpu, u64 access,
 	struct x86_exception *exception);
 
 int handle_ud(struct kvm_vcpu *vcpu);
