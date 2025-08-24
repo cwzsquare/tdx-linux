@@ -5506,6 +5506,7 @@ static int handle_exception_nmi(struct kvm_vcpu *vcpu)
 	static const char seamops_bytecode[] = { __SEAMOPS_BYTECODE };
 	static const char pconfig_bytecode[] = { __PCONFIG_BYTECODE };
 	static const char movdir64b_bytecode[] = {__MOVDIR64B_BYTECODE};
+	static const char serialize_bytecode[] = {__SERIALIZE_BYTECODE};
 	static const char tdcall_bytecode[] = { __TDCALL_BYTECODE };
 
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
@@ -5555,6 +5556,8 @@ static int handle_exception_nmi(struct kvm_vcpu *vcpu)
 				return handle_pconfig(vcpu);
 			else if (memcmp(inst, movdir64b_bytecode, sizeof(movdir64b_bytecode)) == 0)
 				return handle_movdir64b(vcpu);
+			else if (memcmp(inst, serialize_bytecode, sizeof(serialize_bytecode)) == 0)
+				return handle_serialize(vcpu);
 			else if (memcmp(inst, tdcall_bytecode, sizeof(tdcall_bytecode)) == 0)
 				return handle_tdcall(vcpu);
 			else
@@ -8379,6 +8382,7 @@ static __init void vmx_set_cpu_caps(void)
 		kvm_cpu_cap_set(X86_FEATURE_SMX);
 		kvm_cpu_cap_set(X86_FEATURE_PDCM);
 		kvm_cpu_cap_set(X86_FEATURE_MOVDIR64B);
+		kvm_cpu_cap_set(X86_FEATURE_SERIALIZE);
 	}
 
 	/* CPUID 0x7 */

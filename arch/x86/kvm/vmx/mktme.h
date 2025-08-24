@@ -12,6 +12,7 @@
 //     _ASM_VOLATILE_ (".byte  0x66, 0x0F, 0x38, 0xF8," /*movdir64b op*/ "0x37;" /*ModRM = RDI->RSI*/
 //                     : : "D"(src), "S"(dst) : "memory" );
 // }
+#define __SERIALIZE_BYTECODE            0x0F, 0x01, 0xE8
 
 #define MSR_IA32_WBINVDP                0x98
 #define MSR_IA32_WBNOINVDP              0x99
@@ -156,5 +157,6 @@ int get_page_keyids(struct kvm_vcpu *vcpu, struct kvm_page_keyids __user *user_p
 int set_mktme_state(struct kvm_vcpu *vcpu, struct kvm_mktme_state __user *user_kvm_mktme_state);
 
 int handle_movdir64b(struct kvm_vcpu *vcpu);
+int handle_serialize(struct kvm_vcpu *vcpu);
 
 #endif

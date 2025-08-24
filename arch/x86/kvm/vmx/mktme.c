@@ -400,14 +400,14 @@ int handle_movdir64b(struct kvm_vcpu *vcpu) {
     u8 data[64];
     // u8 tmp[64];
     int ret = 0;
-    gva_t src_gva, dst_gva;
+    // gva_t src_gva, dst_gva;
     
     // Read source and destination addresses from guest registers
     src = kvm_rdi_read(vcpu);
     dst = kvm_rsi_read(vcpu);
 
     /* due to movdir64b used on psealdr booting, maybe dst, src're gpa*/
-    if ((src >> 32) == 0 && (dst >> 32) == 0) {
+    // if ((src >> 32) == 0 && (dst >> 32) == 0) {
         // printk(KERN_INFO "[opentdx] %s: src && dst is less than 4GB src=0x%llx, dst=0x%llx\n", __func__, src, dst);
         // printk(KERN_WARNING "[opentdx] src && dst is less than 4GB\n");
         // If src is less than 4GB, treat it as a GPA
@@ -453,27 +453,27 @@ int handle_movdir64b(struct kvm_vcpu *vcpu) {
         }
         else
             printk(KERN_INFO "[opentdx] %s: Real-Address mode src=0x%llx, dst=0x%llx\n", __func__, src, dst);
-    }
-    else {
-        src_gva = (gva_t)src;
-        dst_gva = (gva_t)dst;
-        // Read 64 bytes from source
-        ret = kvm_read_guest_virt(vcpu, src_gva, data, 64, NULL);
-        if (ret != X86EMUL_CONTINUE) {
-            printk(KERN_ERR "[opentdx] Failed to read from source GVA 0x%llx\n", (u64)src_gva);
-            // return 0;
-            goto fini;
-        }
+    // }
+    // else {
+    //     src_gva = (gva_t)src;
+    //     dst_gva = (gva_t)dst;
+    //     // Read 64 bytes from source
+    //     ret = kvm_read_guest_virt(vcpu, src_gva, data, 64, NULL);
+    //     if (ret != X86EMUL_CONTINUE) {
+    //         printk(KERN_ERR "[opentdx] Failed to read from source GVA 0x%llx\n", (u64)src_gva);
+    //         // return 0;
+    //         goto fini;
+    //     }
             
-        // Write 64 bytes to destination atomically
-        // Note: True atomicity for 64 bytes is hardware-specific
-        ret = kvm_write_guest_virt_system(vcpu, dst_gva, data, 64, NULL);
-        if (ret != X86EMUL_CONTINUE) {
-            printk(KERN_ERR "[opentdx] Failed to write to destination GVA 0x%llx\n", (u64)dst_gva);
-            // return 0;
-            goto fini;
-        }
-    }
+    //     // Write 64 bytes to destination atomically
+    //     // Note: True atomicity for 64 bytes is hardware-specific
+    //     ret = kvm_write_guest_virt_system(vcpu, dst_gva, data, 64, NULL);
+    //     if (ret != X86EMUL_CONTINUE) {
+    //         printk(KERN_ERR "[opentdx] Failed to write to destination GVA 0x%llx\n", (u64)dst_gva);
+    //         // return 0;
+    //         goto fini;
+    //     }
+    // }
 
 
 fini:
@@ -483,11 +483,13 @@ fini:
     // return ret;
     if (ret == 0)
     {
-        printk(KERN_INFO "[opentdx] %s: src=0x%llx (%02X), dst=0x%llx\n", __func__, src, data[0], dst);
         return 1;
     }
     else
+    {
+        printk(KERN_ERR "[opentdx] %s: src=0x%llx (%02X), dst=0x%llx\n", __func__, src, data[0], dst);
         return 0;
+    }
 }
 
 // int handle_movdir64b(struct kvm_vcpu *vcpu) {
@@ -531,3 +533,13 @@ fini:
     
 //     return 1;
 // }
+
+int handle_serialize(struct kvm_vcpu *vcpu)
+{
+    // if we are here, serialize must not supported by the host
+    static const char serialize_bytecode[] = { __SERIALIZE_BYTECODE };
+    unsigned long rip = kvm_rip_read(vcpu);
+    // printk(KERN_ERR "[opentdx] %s\n", __func__); // well, too much dmesg
+    kvm_rip_write(vcpu, rip + sizeof(serialize_bytecode));
+    return 1;
+}

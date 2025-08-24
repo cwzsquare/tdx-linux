@@ -6439,6 +6439,8 @@ long kvm_arch_vcpu_ioctl(struct file *filp,
 	case KVM_SET_SEAM_STATE: {
 		struct kvm_seam_state __user *user_kvm_seam_state = argp;
 
+		printk(KERN_INFO "[opentdx] %s KVM_SET_SEAM_STATE\n", __func__);
+
 		r = -EINVAL;
 		if (!kvm_x86_ops.set_seam_state)
 			break;

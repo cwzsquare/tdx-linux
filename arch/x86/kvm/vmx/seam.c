@@ -853,7 +853,6 @@ static int vmx_fail_invalid(struct kvm_vcpu *vcpu)
 
 int handle_seamcall(struct kvm_vcpu *vcpu)
 {
-    printk(KERN_INFO "L0 seamcall\n");
     struct vcpu_vmx *vmx = to_vmx(vcpu);
     struct kvm_vmx *kvm_vmx = to_kvm_vmx(vcpu->kvm);
 
@@ -896,6 +895,7 @@ int handle_seamcall(struct kvm_vcpu *vcpu)
 
 #define INVOKE_PSEAMLDR (1ULL << 63)
     if (rax & INVOKE_PSEAMLDR) {
+        printk(KERN_INFO "L0 seamcall into P-SEAMLDR module\n");
         if (!mutex_trylock(&kvm_vmx->p_seamldr_lock)) {
             return vmx_fail_invalid(vcpu);
         } else if (vmx->in_pseamldr) {
@@ -915,6 +915,8 @@ int handle_seamcall(struct kvm_vcpu *vcpu)
         }
     }
 
+    printk(KERN_INFO "[opentdx] %s: before vmx_get_rflags\n", __func__);
+
     rflags = vmx_get_rflags(vcpu);
     // TODO: single-step debugging should set Trap flag
     vmx_set_rflags(vcpu, rflags & 
@@ -927,6 +929,8 @@ int handle_seamcall(struct kvm_vcpu *vcpu)
     // TODO: nested.current_vmptr should be released here
     vmx->seam_mode = true;
     vmx->seam_vmptr = seam_cvp;
+
+    printk(KERN_INFO "[opentdx] %s: before kvm_read_guest_page\n", __func__);
 
     kvm_read_guest_page(vcpu->kvm, gpa_to_gfn(vmx->seam_vmptr), vmcs, 0, PAGE_SIZE);
 
@@ -957,10 +961,14 @@ int handle_seamcall(struct kvm_vcpu *vcpu)
         up_read(&vcpu->kvm->arch.apicv_update_lock);
     }
 
-    // else
-    //     printk(KERN_WARNING "[opentdx] during %s, enable_apicv=%d\n", __func__, enable_apicv);
+    else
+        printk(KERN_WARNING "[opentdx] during %s, enable_apicv=%d\n", __func__, enable_apicv);
 
-    kvm_write_guest_page(vcpu->kvm, gpa_to_gfn(vmx->seam_vmptr), vmcs, 0, PAGE_SIZE);
+    if(kvm_write_guest_page(vcpu->kvm, gpa_to_gfn(vmx->seam_vmptr), vmcs, 0, PAGE_SIZE) < 0) 
+    {
+        // check if kvm_write_guest_page failed
+        printk(KERN_INFO "[opentdx] during %s, kvm_write_guest_page failed\n", __func__);
+    }
 
 exit:
     free_page((unsigned long) vmcs);
