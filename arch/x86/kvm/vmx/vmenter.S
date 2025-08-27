@@ -111,6 +111,16 @@ SYM_FUNC_START(__vmx_vcpu_run)
 	ALTERNATIVE "jmp .Lspec_ctrl_done", "", X86_FEATURE_MSR_SPEC_CTRL
 
 	/*
+	 * ++ [ADDED LOGIC] ++
+	 * If the global bool 'open_tdx' is true, skip the SPEC_CTRL MSR write.
+	 * This is type-correct for a C 'bool' (8-bit).
+	 */
+	movb open_tdx(%rip), %al
+	cmpb $1, %al
+	je .Lspec_ctrl_done
+	/* -- [END OF ADDED LOGIC] -- */
+
+	/*
 	 * SPEC_CTRL handling: if the guest's SPEC_CTRL value differs from the
 	 * host's, write the MSR.
 	 *

@@ -168,7 +168,7 @@ module_param(allow_smaller_maxphyaddr, bool, S_IRUGO);
  * In addition to these x2apic/PT/CET MSRs are handled specially.
  */
 static u32 vmx_possible_passthrough_msrs[MAX_POSSIBLE_PASSTHROUGH_MSRS] = {
-	MSR_IA32_SPEC_CTRL,
+	// MSR_IA32_SPEC_CTRL,
 	MSR_IA32_PRED_CMD,
 	MSR_IA32_FLUSH_CMD,
 	MSR_IA32_TSC,
@@ -969,7 +969,8 @@ unsigned int __vmx_vcpu_run_flags(struct vcpu_vmx *vmx)
 	 * it after vmexit and store it in vmx->spec_ctrl.
 	 */
 	if (!msr_write_intercepted(vmx, MSR_IA32_SPEC_CTRL))
-		flags |= VMX_RUN_SAVE_SPEC_CTRL;
+		printk(KERN_WARNING "MSR_IA32_SPEC_CTRL write is not intercepted!!!\n");
+		// flags |= VMX_RUN_SAVE_SPEC_CTRL;
 
 	return flags;
 }
@@ -2035,12 +2036,22 @@ static int vmx_get_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		msr_info->data = vmx->msr_ia32_umwait_control;
 		break;
 	case MSR_IA32_SPEC_CTRL:
-		if (!msr_info->host_initiated &&
-		    !guest_has_spec_ctrl_msr(vcpu))
-			return 1;
+		if(!open_tdx)
+		{
+			if (!msr_info->host_initiated &&
+				!guest_has_spec_ctrl_msr(vcpu))
+				return 1;
 
-		msr_info->data = to_vmx(vcpu)->spec_ctrl;
-		break;
+			msr_info->data = to_vmx(vcpu)->spec_ctrl;
+			break;
+		}
+		else
+		{
+			// printk(KERN_INFO "[opentdx-l0kvm] %s MSR_IA32_SPEC_CTRL from %s with guest %s has spec_ctrl_msr\n", __func__, (msr_info->host_initiated ? "host": "guest"), (guest_has_spec_ctrl_msr(vcpu)? "do": "not"));
+			msr_info->data = to_vmx(vcpu)->spec_ctrl;
+			break;
+		}
+
 	case MSR_IA32_SYSENTER_CS:
 		msr_info->data = vmcs_read32(GUEST_SYSENTER_CS);
 		break;
@@ -2420,33 +2431,44 @@ static int vmx_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		vmx->msr_ia32_umwait_control = data;
 		break;
 	case MSR_IA32_SPEC_CTRL:
-		if (!msr_info->host_initiated &&
-		    !guest_has_spec_ctrl_msr(vcpu))
-			return 1;
+		if(!open_tdx) 
+		{
+			if (!msr_info->host_initiated &&
+				!guest_has_spec_ctrl_msr(vcpu))
+				return 1;
 
-		if (kvm_spec_ctrl_test_value(data))
-			return 1;
+			if (kvm_spec_ctrl_test_value(data))
+				return 1;
 
-		vmx->spec_ctrl = data;
-		if (!data)
+			vmx->spec_ctrl = data;
+			if (!data)
+				break;
+
+			/*
+			* For non-nested:
+			* When it's written (to non-zero) for the first time, pass
+			* it through.
+			*
+			* For nested:
+			* The handling of the MSR bitmap for L2 guests is done in
+			* nested_vmx_prepare_msr_bitmap. We should not touch the
+			* vmcs02.msr_bitmap here since it gets completely overwritten
+			* in the merging. We update the vmcs01 here for L1 as well
+			* since it will end up touching the MSR anyway now.
+			*/
+			vmx_disable_intercept_for_msr(vcpu,
+							MSR_IA32_SPEC_CTRL,
+							MSR_TYPE_RW);
 			break;
+		}
+		else
+		{
+			// printk(KERN_INFO "[opentdx-l0kvm] %s MSR_IA32_SPEC_CTRL\n", __func__);
+			vmx->spec_ctrl = data;
+			break;
+		}
 
-		/*
-		 * For non-nested:
-		 * When it's written (to non-zero) for the first time, pass
-		 * it through.
-		 *
-		 * For nested:
-		 * The handling of the MSR bitmap for L2 guests is done in
-		 * nested_vmx_prepare_msr_bitmap. We should not touch the
-		 * vmcs02.msr_bitmap here since it gets completely overwritten
-		 * in the merging. We update the vmcs01 here for L1 as well
-		 * since it will end up touching the MSR anyway now.
-		 */
-		vmx_disable_intercept_for_msr(vcpu,
-					      MSR_IA32_SPEC_CTRL,
-					      MSR_TYPE_RW);
-		break;
+
 	case MSR_IA32_TSX_CTRL:
 		if (!msr_info->host_initiated &&
 		    !(vcpu->arch.arch_capabilities & ARCH_CAP_TSX_CTRL_MSR)) {
@@ -7620,6 +7642,9 @@ void noinstr vmx_spec_ctrl_restore_host(struct vcpu_vmx *vmx,
 	u64 hostval = this_cpu_read(x86_spec_ctrl_current);
 
 	if (!cpu_feature_enabled(X86_FEATURE_MSR_SPEC_CTRL))
+		return;
+
+	if (open_tdx)
 		return;
 
 	if (flags & VMX_RUN_SAVE_SPEC_CTRL)

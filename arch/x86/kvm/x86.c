@@ -2248,6 +2248,10 @@ static int kvm_msr_user_space(struct kvm_vcpu *vcpu, u32 index,
 int kvm_emulate_rdmsr(struct kvm_vcpu *vcpu)
 {
 	u32 ecx = kvm_rcx_read(vcpu);
+
+	// if (ecx == MSR_IA32_SPEC_CTRL)
+	// 	printk(KERN_INFO "%s MSR_IA32_SPEC_CTRL\n", __func__);
+
 	u64 data;
 	int r;
 
@@ -2275,6 +2279,9 @@ int kvm_emulate_wrmsr(struct kvm_vcpu *vcpu)
 	u32 ecx = kvm_rcx_read(vcpu);
 	u64 data = kvm_read_edx_eax(vcpu);
 	int r;
+
+	// if (ecx == MSR_IA32_SPEC_CTRL)
+	// 	printk(KERN_INFO "%s MSR_IA32_SPEC_CTRL with 0x%llx\n", __func__, data);
 
 	r = kvm_emulate_msr_write_with_filter(vcpu, ecx, data);
 
